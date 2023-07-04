@@ -1,8 +1,8 @@
 import { MessageType } from "./message_type.ts";
 
-export interface RequestConfig {
+export type RequestConfig<P = Record<string, any>> = {
   id?: string;
   type: MessageType;
-  payload?: Record<string, any>;
+  payload?: P;
   uri?: string;
-}
+};

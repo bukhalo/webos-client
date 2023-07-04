@@ -1,26 +1,42 @@
-import { MessageType } from "./message_type.ts";
-import { RequestConfig } from "./request_config.ts";
+import { Storage } from "./storage/storage.ts";
+import { LocalStorage } from "./storage/local_storage.ts";
+
+import { CreateAlertPayload } from "./types/create_alert_payload.ts";
+import { Endpoint } from "./types/endpoint.ts";
+import { MessageType } from "./types/message_type.ts";
+import { type RequestConfig } from "./types/request_config.ts";
+
 import { pairingPayload } from "./pairing_payload.ts";
 import { waitCondition } from "./utils.ts";
+import { WebOSError } from "./webos_error.ts";
 
 export class Client extends WebSocket {
+  #storage: Storage;
+  #storageKey: string;
   #eventsStore: Record<string, any> = {};
-  #clientKey: string | null;
+  #clientKey!: string | null;
 
-  constructor(url: string | URL, protocols?: string | string[]) {
+  constructor(
+    url: string | URL,
+    storage: Storage = new LocalStorage(),
+    protocols?: string | string[],
+  ) {
     super(url, protocols);
-    this.#clientKey = localStorage.getItem("clientKey");
+    this.#storage = storage;
+    this.#storageKey = `webos-client-token-${url}`;
     this.onmessage = this.#onmessage;
   }
 
   public async register() {
+    this.#clientKey = await this.#storage.get(this.#storageKey);
+
     // check connection
     await waitCondition(() => this.readyState === 1, 1000);
 
     const payload: { [k: string]: any } = pairingPayload;
 
     // add auth token into pairing payload
-    if (this.#clientKey) payload["client-key"] = this.#clientKey;
+    if (this.#storageKey) payload["client-key"] = this.#clientKey;
 
     const id = crypto.randomUUID();
     const res = await this.sendMessage({
@@ -32,19 +48,19 @@ export class Client extends WebSocket {
     // save the token, after confirming pairing on TV
     if (res?.pairingType === "PROMPT") {
       const res = await this.#getResponseById(id);
-      localStorage.setItem("clientKey", res["client-key"]);
+      await this.#storage.set(this.#storageKey, res["client-key"]);
       return res;
     }
 
     return res;
   }
 
-  public sendMessage(
-    { id = crypto.randomUUID(), type, uri, payload = {} }: RequestConfig,
-  ): Promise<Record<string, any>> {
+  public async sendMessage<P = Record<string, any>, R = Record<string, any>>(
+    { id = crypto.randomUUID(), type, uri, payload }: RequestConfig<P>,
+  ): Promise<R> {
     const message = { id, type, uri, payload };
     this.send(JSON.stringify(message));
-    return this.#getResponseById(id);
+    return await this.#getResponseById(id) as R;
   }
 
   /**
@@ -55,24 +71,52 @@ export class Client extends WebSocket {
     uri: string,
     params: Record<string, any>,
   ): Promise<void> {
-    const buttons = [{ label: "", onClick: uri, params }];
-    const payload = {
+    const buttons = [{ label: "", onclick: uri, params }];
+    const payload: CreateAlertPayload = {
       message: " ",
       buttons: buttons,
       onclose: { uri, params: params },
       onfail: { uri, params: params },
     };
 
-    const { alertId } = await this.sendMessage({
+    const { alertId } = await this.createAlert(payload);
+    await this.closeAlert({ alertId: alertId });
+  }
+
+  public async createAlert(payload: CreateAlertPayload) {
+    return await this.sendMessage<CreateAlertPayload, { alertId: string }>({
       type: MessageType.REQUEST,
-      uri: "ssap://system.notifications/createAlert",
+      uri: Endpoint.CREATE_ALERT,
       payload,
     });
+  }
 
-    await this.sendMessage({
+  public async closeAlert(payload: { alertId: string }) {
+    return await this.sendMessage({
       type: MessageType.REQUEST,
-      uri: "ssap://system.notifications/closeAlert",
-      payload: { alertId: alertId },
+      uri: Endpoint.CLOSE_ALERT,
+      payload,
+    });
+  }
+
+  public async closeAllAlerts() {
+    return await this.sendMessage({
+      type: MessageType.REQUEST,
+      uri: Endpoint.CLOSE_ALL_ALERTS,
+    });
+  }
+
+  public async volumeUp() {
+    return await this.sendMessage({
+      type: MessageType.REQUEST,
+      uri: Endpoint.VOLUME_UP,
+    });
+  }
+
+  public async volumeDown() {
+    return await this.sendMessage({
+      type: MessageType.REQUEST,
+      uri: Endpoint.VOLUME_DOWN,
     });
   }
 
@@ -89,7 +133,7 @@ export class Client extends WebSocket {
       this.#eventsStore[data.id] = data.payload;
 
       if (data.type === "error") {
-        throw new Error(data.error);
+        throw new WebOSError(data.id, data.error);
       }
     } catch (e) {
       console.error(e);
