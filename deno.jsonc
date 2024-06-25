@@ -1,4 +1,7 @@
 {
+  "name": "@bukhalo/webos-client",
+  "version": "0.2.0",
+  "exports": "./mod.ts",
   "tasks": {
     // example command for run tests, use you own TV IP address
     "test": "deno test --allow-net=192.168.0.10:3000 -- ws://192.168.0.10:3000"
