@@ -6,7 +6,7 @@
     "lint": "deno fmt",
     // example command for run tests, use you own TV IP address
     "test": "deno test --allow-net=192.168.0.61:3000 -- ws://192.168.0.61:3000",
-    "publish": "deno task lint && deno publish"
+    "publish": "deno task lint && deno publish --allow-slow-types"
   },
   "publish": {
     "exclude": [".github"]
