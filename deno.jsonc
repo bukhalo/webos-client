@@ -1,9 +1,14 @@
 {
   "name": "@bukhalo/webos-client",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "exports": "./mod.ts",
   "tasks": {
+    "lint": "deno fmt",
     // example command for run tests, use you own TV IP address
-    "test": "deno test --allow-net=192.168.0.10:3000 -- ws://192.168.0.10:3000"
+    "test": "deno test --allow-net=192.168.0.61:3000 -- ws://192.168.0.61:3000",
+    "publish": "deno task lint && deno publish"
+  },
+  "publish": {
+    "exclude": [".github"]
   }
 }

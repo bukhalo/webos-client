@@ -1,6 +1,6 @@
-import { assertObjectMatch } from "./deps_test.ts";
+import { assertObjectMatch } from "jsr:@std/assert";
 import { Client } from "./client.ts";
-import { MessageType } from "./message_type.ts";
+import { MessageType } from "./types/message_type.ts";
 
 Deno.test("client", async (test) => {
   const url = Deno.args[0];
